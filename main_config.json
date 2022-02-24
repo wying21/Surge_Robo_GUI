@@ -1,9 +1,9 @@
 {
     "end_char": 3,
-    "last_joy": 1,
+    "gear_level": 2,
+    "last_joy": 0,
     "last_port": 0,
-    "temp_joys_list": [
-        "PS4 Controller"
-    ],
+    "skin_mode": "classic",
+    "temp_joys_list": [],
     "temp_ports_list": []
 }

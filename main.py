@@ -6,8 +6,9 @@ import serial_widget_thread
 from robot_control import Robot
 from joystick_control import joystick_manager, flash_joyState_text, load_joy_options
 from robot_control import Robot
+from PySide6.QtGui import QIcon
 import sys
-from PySide6.QtCore import QTimer
+from PySide6.QtCore import QTimer,QSize
 from PySide6.QtWidgets import QApplication, QMainWindow, QDialog
 
 
@@ -47,38 +48,41 @@ cursor = dialog_port.recv_Text.textCursor()
 
 joy_config_flag  = True
 joy_config_index = -1
+fashion_flag = False
 
-robo_options = {
+global_options = {
     "temp_ports_list": [],
     "temp_joys_list" : [],
     "last_port"      : 0,
     "last_joy"       : 0,
     "end_char"       : 0,
+    "skin_mode"      : "classic",
+    "gear_level"     : 0,
 }
 
 
 def fresh_ports():
     ports, names = SurgRobot.scan_ports()    
-    for k, i in enumerate(robo_options["temp_ports_list"]):
+    for k, i in enumerate(global_options["temp_ports_list"]):
         if i not in names:
             main_window.com_select.removeItem(k+1)
     
     for k, i in zip(ports, names):
-        if i not in robo_options["temp_ports_list"]:
+        if i not in global_options["temp_ports_list"]:
             main_window.com_select.addItem(i)    
-    robo_options["temp_ports_list"] = names
+    global_options["temp_ports_list"] = names
 
 
 def fresh_joystick():
     joys = JoyStick.scan_joystick()
-    for k, i in enumerate(robo_options["temp_joys_list"]):
+    for k, i in enumerate(global_options["temp_joys_list"]):
         if i not in joys:
             main_window.joystick_select.removeItem(k+1)
     
     for  i in joys:
-        if i not in robo_options["temp_joys_list"]:
+        if i not in global_options["temp_joys_list"]:
             main_window.joystick_select.addItem(i)
-    robo_options["temp_joys_list"] = joys
+    global_options["temp_joys_list"] = joys
 
 
 def func_for_show_ports(*args):
@@ -94,7 +98,7 @@ def func_for_select_port(*args):
         SurgRobot.open_robot_port(SurgRobot.port_list[index-1]) 
     else:
         SurgRobot.close_robot_port()
-    robo_options["last_port"] = index
+    global_options["last_port"] = index
 
 
 def func_for_show_joysticks(*args):
@@ -110,11 +114,12 @@ def func_for_select_joystick(*args):
         JoyStick.start_joystick(index-1)
     else:
         JoyStick.close_joystick()
-    robo_options["last_joy"] = index
+    global_options["last_joy"] = index
     
 def func_for_gearlevel_change(*args):
     """更改速度档位的函数"""
     SurgRobot.gear_level = (main_window.gear_level_slider.value() * 0.2)
+    global_options["gear_level"] = main_window.gear_level_slider.value()
     print(SurgRobot.gear_level)
     pass
 
@@ -140,9 +145,9 @@ def func_for_open_joySet_dialog(*args):
     dialog_joyconfig.joyStateShow.clear()
     global thread_joylisten
     JoyStick.close_joystick()
-    index = robo_options["last_joy"]
+    index = global_options["last_joy"]
     if index > 0:
-        thread_joylisten.set_joy(robo_options["last_joy"]-1)
+        thread_joylisten.set_joy(global_options["last_joy"]-1)
     else:
         dialog_joy_setting_update(load_joy_options()["default"])
         dialog_joyconfig.joyStateShow.append("手柄未选择")
@@ -151,9 +156,9 @@ def func_for_close_joySet_dialog(*args):
     """关闭手柄调试窗口时运行的函数"""
     global thread_joylisten
     thread_joylisten.ignore_joy()
-    index = robo_options["last_joy"]
+    index = global_options["last_joy"]
     if index > 0:
-        JoyStick.start_joystick(robo_options["last_joy"]-1)
+        JoyStick.start_joystick(global_options["last_joy"]-1)
     
 
 def func_for_open_serial_dialog(*args):
@@ -175,7 +180,7 @@ def func_for_close_serial_dialog(*args):
 
 def func_for_select_end_char(*args):
     '''串口监视器选择结束符的函数'''
-    robo_options["end_char"]=args[0]
+    global_options["end_char"]=args[0]
 
 
 def func_for_print_args(*args):
@@ -234,6 +239,8 @@ def bind_methods():
     # menu
     main_window.menu_joySet.triggered.connect(diaJoyAPP.exec)
     main_window.menu_Port.triggered.connect(diaPortAPP.exec)
+    main_window.style_dark.triggered.connect(change_style_dark)
+    main_window.style_classic.triggered.connect(change_style_classic)
     # dialog_port
     dialog_port.pushButton.clicked.connect(func_for_send_serial_msg)
     dialog_port.pushButton_2.clicked.connect(dialog_port.recv_Text.clear)
@@ -256,7 +263,7 @@ def bind_methods():
 
     # buttons: steps
     main_window.all_stop_button.clicked.connect(SurgRobot.all_stop) 
-    main_window.cath_up_button.clicked.connect(SurgRobot.all_stop)
+    main_window.cath_up_button.clicked.connect(save_options)
     # buttons: disable_state
     main_window.cath_disable_button.clicked.connect(lambda: disable_swicher(0))
     main_window.wire_disable_button.clicked.connect(lambda: disable_swicher(1))
@@ -278,6 +285,45 @@ def init_methods(*args):
     load_options()
     open_serial_thread()
     open_joy_thread()
+
+
+def change_style_classic():
+    """切换样式到经典"""
+    if global_options["skin_mode"] != "classic":
+        global_options["skin_mode"] = "classic"
+        w.setStyleSheet("")
+        diaPortAPP.setStyleSheet("")
+        main_window.cath_up_button.setStyleSheet(u"border-image: url(:/up.png);\n""")
+        main_window.cath_down_button.setStyleSheet(u"border-image: url(:/down.png);\n""")
+        main_window.wire_up_button.setStyleSheet(u"border-image: url(:/up.png);\n""")
+        main_window.wire_down_button.setStyleSheet(u"border-image: url(:/down.png);\n""")
+        main_window.wire_clock_button.setStyleSheet(u"border-image: url(:/clock-wise.png);\n""")
+        main_window.wire_antiClock_button.setStyleSheet(u"border-image: url(:/anti-clock-wise.png);\n""")
+        button_icon = QIcon()
+        button_icon.addFile(u":/disable.png", QSize(), QIcon.Normal, QIcon.Off)
+        main_window.cath_disable_button.setIcon(button_icon)
+        main_window.wire_disable_button.setIcon(button_icon)
+        main_window.wire_rot_disable_button.setIcon(button_icon)
+
+def change_style_dark():
+    """切换样式到暗黑"""
+    if global_options["skin_mode"] != "MaterialDark":
+        global_options["skin_mode"] = "MaterialDark"
+        style_file = './resources/QSS/MaterialDark.qss'
+        style_sheet = read_qss_file(style_file)
+        diaPortAPP.setStyleSheet(style_sheet)
+        w.setStyleSheet(style_sheet)
+        main_window.cath_up_button.setStyleSheet(u"border-image: url(:/up_dark.png);\n""")
+        main_window.cath_down_button.setStyleSheet(u"border-image: url(:/down_dark.png);\n""")
+        main_window.wire_up_button.setStyleSheet(u"border-image: url(:/up_dark.png);\n""")
+        main_window.wire_down_button.setStyleSheet(u"border-image: url(:/down_dark.png);\n""")
+        main_window.wire_clock_button.setStyleSheet(u"border-image: url(:/clock-wise_dark.png);\n""")
+        main_window.wire_antiClock_button.setStyleSheet(u"border-image: url(:/anti-clock-wise_dark.png);\n""")
+        button_icon = QIcon()
+        button_icon.addFile(u":/disable_dark.png", QSize(), QIcon.Normal, QIcon.Off)
+        main_window.cath_disable_button.setIcon(button_icon)
+        main_window.wire_disable_button.setIcon(button_icon)
+        main_window.wire_rot_disable_button.setIcon(button_icon) 
 
 def save_joyset(*args):
     """保存手柄设置运行的函数"""
@@ -336,7 +382,7 @@ def save_options():
     """导出配置到文件中"""
     import json as json
     with open("main_config.json", 'w') as js_file:
-        js_string = json.dumps(robo_options, sort_keys=True, indent=4, separators=(',', ': '))
+        js_string = json.dumps(global_options, sort_keys=True, indent=4, separators=(',', ': '))
         js_file.write(js_string)
 
 def load_options():
@@ -346,12 +392,31 @@ def load_options():
         temp_robo_options = json.load(js_file)
     fresh_ports()
     fresh_joystick()
-    if temp_robo_options["temp_ports_list"] == robo_options["temp_ports_list"]:
+
+    for key in global_options:
+        try:
+            temp_robo_options[key]
+        except:
+            temp_robo_options[key] = global_options[key]
+
+    if temp_robo_options["temp_ports_list"] == global_options["temp_ports_list"]:
         main_window.com_select.setCurrentIndex(temp_robo_options["last_port"])
 
-    if temp_robo_options["temp_joys_list"] == robo_options["temp_joys_list"]:
+    if temp_robo_options["temp_joys_list"] == global_options["temp_joys_list"]:
         main_window.joystick_select.setCurrentIndex(temp_robo_options["last_joy"])
     dialog_port.end_select.setCurrentIndex(temp_robo_options["end_char"])
+
+    if temp_robo_options["skin_mode"] == "MaterialDark":
+        change_style_dark()
+    
+    if 0 <= temp_robo_options["gear_level"] <= 5:
+        SurgRobot.gear_level = temp_robo_options["gear_level"]
+        main_window.gear_level_slider.setValue(temp_robo_options["gear_level"])
+
+
+def read_qss_file(qss_file_name):
+    with open(qss_file_name, 'r',  encoding='UTF-8') as file:
+        return file.read()      
 
 def main():
     bind_methods()
