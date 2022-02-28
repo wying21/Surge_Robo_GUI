@@ -1,2 +1,2 @@
-pyside6-uic buttonSetDialog.ui > buttonSetDialog.py
+pyside6-uic mainWindow.ui > mainWindow.py
 pause

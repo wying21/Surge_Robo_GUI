@@ -1,9 +1,21 @@
 {
+    "disable_states": [
+        false,
+        true,
+        true
+    ],
     "end_char": 3,
-    "gear_level": 2,
+    "gear_level": 4,
     "last_joy": 0,
     "last_port": 0,
-    "skin_mode": "classic",
-    "temp_joys_list": [],
+    "skin_mode": "MaterialDark",
+    "step_levels": [
+        0,
+        0,
+        0
+    ],
+    "temp_joys_list": [
+        "PS4 Controller"
+    ],
     "temp_ports_list": []
 }

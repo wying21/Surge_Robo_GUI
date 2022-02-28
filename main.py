@@ -6,7 +6,7 @@ import serial_widget_thread
 from robot_control import Robot
 from joystick_control import joystick_manager, flash_joyState_text, load_joy_options
 from robot_control import Robot
-from PySide6.QtGui import QIcon
+from PySide6.QtGui import QIcon, QShortcut
 import sys
 from PySide6.QtCore import QTimer,QSize
 from PySide6.QtWidgets import QApplication, QMainWindow, QDialog
@@ -40,7 +40,7 @@ main_window.speed_UI_list = [main_window.cath_speed_lcd,
 
 SurgRobot = Robot()
 JoyStick = joystick_manager(SurgRobot, main_window)
-thread_listen    = serial_widget_thread.read_thr(SurgRobot, dialog_port)
+thread_listen      = serial_widget_thread.read_thr(SurgRobot, dialog_port)
 thread_listen.name = "串口调试助手线程"
 thread_joylisten = flash_joyState_text()
 thread_joylisten.name = "手柄调试助手线程"
@@ -58,10 +58,13 @@ global_options = {
     "end_char"       : 0,
     "skin_mode"      : "classic",
     "gear_level"     : 0,
+    "step_levels"    : [0, 0, 0],
+    "disable_states" : [True, True, True],
 }
 
 
 def fresh_ports():
+    main_window.com_select.setItemText(0, "断开连接")
     ports, names = SurgRobot.scan_ports()    
     for k, i in enumerate(global_options["temp_ports_list"]):
         if i not in names:
@@ -105,7 +108,6 @@ def func_for_show_joysticks(*args):
     """展示手柄的函数"""
     fresh_joystick()
     main_window.joystick_select.showPopup()
-
 
 def func_for_select_joystick(*args):
     """连接并启动某个手柄的函数"""
@@ -202,31 +204,58 @@ def dialog_joy_setting_update(dict):
     pass
 
 
-def disable_swicher(button_id):
-    """绑定禁用-启用按钮的方法"""
+def disable_swicher(button_id, state=None):
+    """绑定禁用-启用按钮的方法, 同时可以改变机器人的禁用情况"""
     button = None
+    style_str = ""
     if button_id == 0:
         button = main_window.cath_disable_button
     elif button_id == 1:
         button = main_window.wire_disable_button
     elif button_id == 2:
         button = main_window.wire_rot_disable_button
-    if button is not None:
-        text = button.text()
-        if text[2:4] == "禁止":
-            button.setText(f"{text[0:2]}启用{text[4::]}")
-            SurgRobot.change_disable_state(button_id, True)
-        elif text[2:4] == "启用":
+    if global_options["skin_mode"] == "classic":
+        style_str = ""
+    elif global_options["skin_mode"] == "MaterialDark":
+        style_str = "_dark"
+    text = button.text()
+    
+    def set_state(button, state):
+        if state:
             button.setText(f"{text[0:2]}禁止{text[4::]}")
             SurgRobot.change_disable_state(button_id, False)
+            button_icon = QIcon()
+            button_icon.addFile(f":/disable{style_str}.png", QSize(), QIcon.Normal, QIcon.Off)
+            button.setIcon(button_icon)
+            global_options["disable_states"][button_id] = True
         else:
-            print(f"异常值: {text}")
+            button.setText(f"{text[0:2]}启用{text[4::]}")
+            SurgRobot.change_disable_state(button_id, True)
+            button_icon = QIcon()
+            button_icon.addFile(f":/accept{style_str}.png", QSize(), QIcon.Normal, QIcon.Off)
+            button.setIcon(button_icon)
+            global_options["disable_states"][button_id] = False 
 
+    if state is None:
+        if global_options["disable_states"][button_id]:
+            set_state(button, False)
+        else:
+            set_state(button, True)
+    else:
+        set_state(button, state)           
+
+def func_for_serial_erro(*args):
+    """串口异常处理的函数"""
+    SurgRobot.ser.close()
+    main_window.com_select.setItemText(0, "连接失败, 请重试")
+    main_window.com_select.setCurrentIndex(0)
+    diaPortAPP.close()
 
 def bind_methods():
     """为各个小部件绑定事件"""
     global thread_listen
     SurgRobot.spd_signal.connect(func_for_lcd_speed)
+    SurgRobot.port_erro_signal.connect(func_for_serial_erro)
     # com_select
     main_window.com_select.mousePressEvent = func_for_show_ports
     main_window.com_select.currentIndexChanged.connect(func_for_select_port) 
@@ -236,18 +265,29 @@ def bind_methods():
     # gear_level_slider
     main_window.gear_level_slider.setPageStep(1)
     main_window.gear_level_slider.valueChanged.connect(func_for_gearlevel_change)
+    # step_slider
+    main_window.cath_step_slider.valueChanged.connect(
+        lambda x:main_window.cath_step_text.setText(f"{(0.5+0.01515152*x):.2f}mm"))
+    main_window.wire_step_slider.valueChanged.connect(
+        lambda x:main_window.wire_step_text.setText(f"{(0.5+0.01515152*x):.2f}mm"))
+    main_window.wireRot_step_slider.valueChanged.connect(
+        lambda x:main_window.wireRot_step_text.setText(f"{(5+0.40404*x):.2f}°"))
     # menu
     main_window.menu_joySet.triggered.connect(diaJoyAPP.exec)
     main_window.menu_Port.triggered.connect(diaPortAPP.exec)
     main_window.style_dark.triggered.connect(change_style_dark)
     main_window.style_classic.triggered.connect(change_style_classic)
     # dialog_port
+    shortcut = QShortcut(diaPortAPP)
+    shortcut.setKey(u'Return')
+    shortcut.activated.connect(func_for_send_serial_msg)
     dialog_port.pushButton.clicked.connect(func_for_send_serial_msg)
     dialog_port.pushButton_2.clicked.connect(dialog_port.recv_Text.clear)
     dialog_port.end_select.currentIndexChanged.connect(func_for_select_end_char)
     dialog_port.AutoLast.clicked.connect(thread_listen.jump_to_last_line)
     thread_listen.worker.jump_sig.connect(dialog_port.recv_Text.setTextCursor)
     thread_listen.worker.send_char_sig.connect(cursor.insertText)
+    thread_listen.worker.erro_sig.connect(func_for_serial_erro)
     diaPortAPP.showEvent = func_for_open_serial_dialog
     diaPortAPP.closeEvent = func_for_close_serial_dialog
     # dialog_joy
@@ -299,11 +339,15 @@ def change_style_classic():
         main_window.wire_down_button.setStyleSheet(u"border-image: url(:/down.png);\n""")
         main_window.wire_clock_button.setStyleSheet(u"border-image: url(:/clock-wise.png);\n""")
         main_window.wire_antiClock_button.setStyleSheet(u"border-image: url(:/anti-clock-wise.png);\n""")
-        button_icon = QIcon()
-        button_icon.addFile(u":/disable.png", QSize(), QIcon.Normal, QIcon.Off)
-        main_window.cath_disable_button.setIcon(button_icon)
-        main_window.wire_disable_button.setIcon(button_icon)
-        main_window.wire_rot_disable_button.setIcon(button_icon)
+        button_icon_accept, button_icon_disable = QIcon(), QIcon()
+        button_icon_disable.addFile(u":/disable.png", QSize(), QIcon.Normal, QIcon.Off)
+        button_icon_accept.addFile(u":/accept.png", QSize(), QIcon.Normal, QIcon.Off)
+        buttons = [main_window.cath_disable_button, main_window.wire_disable_button, main_window.wire_rot_disable_button]
+        for button, state in zip(buttons, global_options["disable_states"]):
+            if state:
+                button.setIcon(button_icon_disable)
+            else:
+                button.setIcon(button_icon_accept)
 
 def change_style_dark():
     """切换样式到暗黑"""
@@ -319,11 +363,15 @@ def change_style_dark():
         main_window.wire_down_button.setStyleSheet(u"border-image: url(:/down_dark.png);\n""")
         main_window.wire_clock_button.setStyleSheet(u"border-image: url(:/clock-wise_dark.png);\n""")
         main_window.wire_antiClock_button.setStyleSheet(u"border-image: url(:/anti-clock-wise_dark.png);\n""")
-        button_icon = QIcon()
-        button_icon.addFile(u":/disable_dark.png", QSize(), QIcon.Normal, QIcon.Off)
-        main_window.cath_disable_button.setIcon(button_icon)
-        main_window.wire_disable_button.setIcon(button_icon)
-        main_window.wire_rot_disable_button.setIcon(button_icon) 
+        button_icon_accept, button_icon_disable = QIcon(), QIcon()
+        button_icon_disable.addFile(u":/disable_dark.png", QSize(), QIcon.Normal, QIcon.Off)
+        button_icon_accept.addFile(u":/accept_dark.png", QSize(), QIcon.Normal, QIcon.Off)
+        buttons = [main_window.cath_disable_button, main_window.wire_disable_button, main_window.wire_rot_disable_button]
+        for button, state in zip(buttons, global_options["disable_states"]):
+            if state:
+                button.setIcon(button_icon_disable)
+            else:
+                button.setIcon(button_icon_accept)
 
 def save_joyset(*args):
     """保存手柄设置运行的函数"""
@@ -412,6 +460,10 @@ def load_options():
     if 0 <= temp_robo_options["gear_level"] <= 5:
         SurgRobot.gear_level = temp_robo_options["gear_level"]
         main_window.gear_level_slider.setValue(temp_robo_options["gear_level"])
+    
+    for button_id, state in enumerate(temp_robo_options["disable_states"]):
+        disable_swicher(button_id, state)
+
 
 
 def read_qss_file(qss_file_name):
