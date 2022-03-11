@@ -1,12 +1,12 @@
 {
     "disable_states": [
-        false,
+        true,
         true,
         true
     ],
     "end_char": 3,
-    "gear_level": 4,
-    "last_joy": 0,
+    "gear_level": 2,
+    "last_joy": 1,
     "last_port": 1,
     "skin_mode": "MaterialDark",
     "step_levels": [
@@ -18,6 +18,6 @@
         "PS4 Controller"
     ],
     "temp_ports_list": [
-        "USB-SERIAL CH340 (COM3)"
+        "COM3"
     ]
 }
