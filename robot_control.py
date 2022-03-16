@@ -32,7 +32,7 @@ class Robot(QObject):
             self.write_lock.acquire()
             try:
                 self.ser.read_all()
-                msg = b"?\r\n"
+                msg = b"?p\r\n"
                 self.ser.write(msg)
                 a = self.ser.read()
                 for _ in range(25):
@@ -54,6 +54,39 @@ class Robot(QObject):
                 x = x / 100000 * 1.875
                 y = y / 100000 * 1.875
                 z = z / 100000 * 1.875
+            except:
+                pass
+        return (x, y, z)
+    def get_meter(self):
+        '''查询电压电流信息'''
+        buffer = None
+        if self.ser.isOpen():
+            self.read_lock.acquire()
+            self.write_lock.acquire()
+            try:
+                self.ser.read_all()
+                msg = b"?m\r\n"
+                self.ser.write(msg)
+                a = self.ser.read()
+                for _ in range(25):
+                    b = self.ser.read()
+                    if a == b":" and b == b":":
+                        buffer = self.ser.read(24)
+                        break
+                    else:
+                        a = b
+            except BaseException as e:
+                self.port_erro_signal.emit(str(e))
+            self.read_lock.release()
+            self.write_lock.release()
+        
+        x, y, z = None, None, None
+        if buffer is not None:
+            try:
+                x, y, z = struct.unpack("3d", buffer)
+                x = x 
+                y = y 
+                z = z 
             except:
                 pass
         return (x, y, z)

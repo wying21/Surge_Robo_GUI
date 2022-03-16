@@ -1,0 +1,1 @@
+D:\anaconda\envs\gui\python.exe main.py
